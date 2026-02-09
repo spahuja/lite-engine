@@ -7,7 +7,7 @@ package logger
 import (
 	"net/http"
 
-	"github.com/gofrs/uuid"
+	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
 )
 
@@ -16,7 +16,7 @@ func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get("X-Request-ID")
 		if id == "" {
-			newUUID, _ := uuid.NewV4()
+			newUUID, _ := uuid.NewRandom()
 			id = newUUID.String()
 		}
 		ctx := r.Context()
