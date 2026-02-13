@@ -288,8 +288,11 @@ func setTiEnvVariables(step *spec.Step, config *tiCfg.Cfg) {
 	envMap[ti.InfraEnv] = ti.HarnessInfra
 }
 
-func getLogServiceClient(cfg *api.LogConfig) logstream.Client {
+func getLogServiceClient(cfg *api.LogConfig, useOptimizedClient bool) logstream.Client {
 	if cfg.URL != "" {
+		if useOptimizedClient {
+			return remote.NewOptimizedHTTPClient(cfg.URL, cfg.AccountID, cfg.Token, cfg.IndirectUpload, false, "", "")
+		}
 		return remote.NewHTTPClient(cfg.URL, cfg.AccountID, cfg.Token, cfg.IndirectUpload, false, "", "")
 	}
 	return stdout.New()
@@ -300,7 +303,18 @@ func getLogServiceClient(cfg *api.LogConfig) logstream.Client {
 func GetReplacer(
 	cfg *api.LogConfig, logKey, name string, secrets []string,
 ) logstream.Writer {
-	client := getLogServiceClient(cfg)
+	client := getLogServiceClient(cfg, false)
+	wc := livelog.New(context.Background(), client, logKey, name, []logstream.Nudge{}, false, cfg.TrimNewLineSuffix, cfg.SkipOpeningStream, cfg.SkipClosingStream)
+	return logstream.NewReplacer(wc, secrets)
+}
+
+// This is used to create a log service client with an optimized http client,
+// with improved timeouts and retires.
+// This is used by the local Delegate 2.0 (Runner).
+func GetReplacerWithOptimizedClient(
+	cfg *api.LogConfig, logKey, name string, secrets []string,
+) logstream.Writer {
+	client := getLogServiceClient(cfg, true)
 	wc := livelog.New(context.Background(), client, logKey, name, []logstream.Nudge{}, false, cfg.TrimNewLineSuffix, cfg.SkipOpeningStream, cfg.SkipClosingStream)
 	return logstream.NewReplacer(wc, secrets)
 }

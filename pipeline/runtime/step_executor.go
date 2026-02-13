@@ -329,18 +329,19 @@ func (e *StepExecutor) executeStep(r *api.StartStepRequest, wr logstream.Writer)
 		tiConfig = &g
 	}
 	ctx := context.Background()
-	return executeStepHelper(ctx, r, e.engine.Run, wr, tiConfig)
+	return executeStepHelper(ctx, r, e.engine.Run, wr, tiConfig, false)
 }
 
 // executeStepHelper is a helper function which is used both by this step executor as well as the
 // stateless step executor. This is done so as to not duplicate logic across multiple implementations.
 // Eventually, we should deprecate this step executor in favor of the stateless executor.
-func executeStepHelper( //nolint:gocritic
+func executeStepHelper( //nolint:gocritic,gocyclo
 	ctx context.Context,
 	r *api.StartStepRequest,
 	f RunFunc,
 	wr logstream.Writer,
-	tiCfg *tiCfg.Cfg) (*runtime.State, map[string]string,
+	tiCfg *tiCfg.Cfg,
+	enableDebugLogs bool) (*runtime.State, map[string]string,
 	map[string]string, []byte, []*api.OutputV2, *types.TelemetryData, string, error) {
 	// if the step is configured as a daemon, it is detached
 	// from the main process and executed separately.
@@ -368,6 +369,23 @@ func executeStepHelper( //nolint:gocritic
 
 	exited, outputs, envs, artifact, outputV2, telemetryData, optimizationState, err :=
 		run(ctx, f, r, wr, tiCfg)
+
+	if enableDebugLogs {
+		fields := logrus.Fields{
+			"step_id":   r.ID,
+			"step_name": r.Name,
+		}
+		if err != nil {
+			fields["error"] = err.Error()
+		}
+		if exited != nil {
+			fields["exit_code"] = exited.ExitCode
+			fields["exited"] = exited.Exited
+			fields["oom_killed"] = exited.OOMKilled
+		}
+		logrus.WithFields(fields).Debugln("step execution completed")
+	}
+
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
@@ -385,6 +403,12 @@ func executeStepHelper( //nolint:gocritic
 	// DeadlineExceeded error this indicates the step was timed out.
 	switch ctx.Err() {
 	case context.Canceled, context.DeadlineExceeded:
+		if enableDebugLogs {
+			logrus.WithError(ctx.Err()).WithFields(logrus.Fields{
+				"step_id":   r.ID,
+				"step_name": r.Name,
+			}).Debugln("returning due to context error")
+		}
 		return nil, nil, nil, nil, nil, nil, "", ctx.Err()
 	}
 
