@@ -8,24 +8,80 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version-file: go.mod
-        cache: true
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+          cache: true
 
-    - name: Verify Go version
-      run: go version
+      - name: Verify Go version
+        run: go version
 
-    - name: Download dependencies
-      run: go mod download
+      # ==============================
+      # Machine Specification Section
+      # ==============================
 
-    - name: Build
-      run: go build -v ./...
+      - name: Show basic runner info
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Runner Name: $RUNNER_NAME"
+          echo "Runner Arch: $RUNNER_ARCH"
+          echo "Image OS: $ImageOS"
+          echo "Image Version: $ImageVersion"
 
-    - name: Test
-      run: go test -v ./...
+      - name: CPU Information
+        run: |
+          echo "===== CPU INFO ====="
+          lscpu
+          echo ""
+          echo "CPU cores: $(nproc)"
+          echo ""
+          echo "Model name:"
+          grep "model name" /proc/cpuinfo | head -1
 
+      - name: Memory Information
+        run: |
+          echo "===== MEMORY INFO ====="
+          free -h
+          echo ""
+          echo "Total Memory:"
+          grep MemTotal /proc/meminfo
+
+      - name: Disk Information
+        run: |
+          echo "===== DISK INFO ====="
+          df -h
+          echo ""
+          echo "Block Devices:"
+          lsblk
+
+      - name: OS Information
+        run: |
+          echo "===== OS INFO ====="
+          uname -a
+          echo ""
+          cat /etc/os-release
+
+      - name: Try to Detect Vendor (VM Host)
+        run: |
+          echo "===== SYSTEM MANUFACTURER ====="
+          sudo dmidecode -s system-manufacturer || echo "Not permitted"
+          echo ""
+          echo "===== SYSTEM PRODUCT NAME ====="
+          sudo dmidecode -s system-product-name || echo "Not permitted"
+
+      # ==============================
+      # Go Build & Test
+      # ==============================
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
